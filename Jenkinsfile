@@ -2,10 +2,9 @@ pipeline {
     agent any
 
     stages {
-
         stage('Clone Repo') {
             steps {
-                git 'https://github.com/S-Eldeen/devops-python-app.git'
+                git branch: 'main', url: 'https://github.com/S-Eldeen/devops-python-app.git'
             }
         }
 
