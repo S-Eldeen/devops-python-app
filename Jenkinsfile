@@ -5,7 +5,7 @@ pipeline {
 
         stage('Clone Repo') {
             steps {
-                git 'YOUR_GITHUB_REPO'
+                git 'https://github.com/S-Eldeen/devops-python-app.git'
             }
         }
 
