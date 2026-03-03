@@ -41,22 +41,26 @@ post {
                 script: "git log -1 --pretty=format:'%h by %an on %cd' --date=short"
             ).trim()
 
-            // مين عمل Build
-            def buildUser = env.BUILD_USER ?: "Unknown"
+            // تحديد مين اللي عامل trigger
+            def buildUser = "Unknown"
 
-            // الحالة ولون الرسالة
+            if (currentBuild.getBuildCauses('com.cloudbees.jenkins.GitHubPushCause')) {
+                buildUser = "GitHub Push"
+            } else if (currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause')) {
+                buildUser = "${currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause')[0].userName}"
+            }
+
+            // Slack Notification
             def slackColor = currentBuild.currentResult == 'SUCCESS' ? 'good' : 'danger'
             def statusEmoji = currentBuild.currentResult == 'SUCCESS' ? '✅' : '❌'
 
-            // Slack Notification باستخدام curl
-            def payload = """
-            {
-              "channel": "#jenkins-notification",
-              "text": "${statusEmoji} Build ${currentBuild.currentResult} for ${env.JOB_NAME} #${env.BUILD_NUMBER}\nTriggered by: ${buildUser}\nLast commit: ${lastCommit}"
-            }
-            """
-
-            sh "curl -X POST -H 'Content-type: application/json' --data '${payload}' ${SLACK_WEBHOOK_URL}"
+            slackSend(
+                channel: '#devops-alerts',
+                color: slackColor,
+                message: "${statusEmoji} Build ${currentBuild.currentResult} for ${env.JOB_NAME} #${env.BUILD_NUMBER}\n" +
+                         "Triggered by: ${buildUser}\n" +
+                         "Last commit: ${lastCommit}"
+            )
         }
     }
 }
