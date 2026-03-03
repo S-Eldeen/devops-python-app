@@ -12,4 +12,4 @@ PORT = 5000
 print("Server Started...")
 server = HTTPServer(("0.0.0.0", PORT), handler)
 server.serve_forever()
-print("NEW VERSION 1")
+print("NEW VERSION")
