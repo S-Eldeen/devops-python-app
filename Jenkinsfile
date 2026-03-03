@@ -6,9 +6,7 @@ pipeline {
     stages {
 
         stage('Clean Workspace') {
-            steps {
-                deleteDir()
-            }
+            steps { deleteDir() }
         }
 
         stage('Checkout Code') {
@@ -36,31 +34,32 @@ pipeline {
     }
 
     post {
-        success {
+        always {
             script {
+                // آخر commit
                 def lastCommit = sh(
                     returnStdout: true,
-                    script: "git log -1 --pretty=format:'%h by %an on %ad'"
+                    script: "git log -1 --pretty=format:'%h by %an on %cd' --date=short"
                 ).trim()
 
-                slackSend(
-                    channel: '#devops-alerts',
-                    color: 'good',
-                    message: "✅ Build SUCCESS for ${env.JOB_NAME} #${env.BUILD_NUMBER}\nLast commit: ${lastCommit}"
-                )
-            }
-        }
-        failure {
-            script {
-                def lastCommit = sh(
-                    returnStdout: true,
-                    script: "git log -1 --pretty=format:'%h by %an on %ad'"
-                ).trim()
+                // مين عمل Build
+                def buildUser = ''
+                def causes = currentBuild.rawBuild.getCauses()
+                for (cause in causes) {
+                    buildUser += cause.shortDescription + "\n"
+                }
+
+                // Slack Notification
+                def slackColor = currentBuild.currentResult == 'SUCCESS' ? 'good' : 'danger'
+                def statusEmoji = currentBuild.currentResult == 'SUCCESS' ? '✅' : '❌'
 
                 slackSend(
+                    webhookUrl: env.SLACK_WEBHOOK_URL,
                     channel: '#devops-alerts',
-                    color: 'danger',
-                    message: "❌ Build FAILED for ${env.JOB_NAME} #${env.BUILD_NUMBER}\nLast commit: ${lastCommit}"
+                    color: slackColor,
+                    message: "${statusEmoji} Build ${currentBuild.currentResult} for ${env.JOB_NAME} #${env.BUILD_NUMBER}\n" +
+                             "Triggered by:\n${buildUser}\n" +
+                             "Last commit: ${lastCommit}"
                 )
             }
         }
