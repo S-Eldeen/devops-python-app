@@ -33,35 +33,31 @@ pipeline {
         }
     }
 
-    post {
-        always {
-            script {
-                // آخر commit
-                def lastCommit = sh(
-                    returnStdout: true,
-                    script: "git log -1 --pretty=format:'%h by %an on %cd' --date=short"
-                ).trim()
+ post {
+    always {
+        script {
+            // آخر commit
+            def lastCommit = sh(
+                returnStdout: true,
+                script: "git log -1 --pretty=format:'%h by %an on %cd' --date=short"
+            ).trim()
 
-                // مين عمل Build
-                def buildUser = ''
-                def causes = currentBuild.rawBuild.getCauses()
-                for (cause in causes) {
-                    buildUser += cause.shortDescription + "\n"
-                }
+            // مين عمل Build
+            def buildUser = env.BUILD_USER ?: "Unknown"
 
-                // Slack Notification
-                def slackColor = currentBuild.currentResult == 'SUCCESS' ? 'good' : 'danger'
-                def statusEmoji = currentBuild.currentResult == 'SUCCESS' ? '✅' : '❌'
+            // Slack Notification
+            def slackColor = currentBuild.currentResult == 'SUCCESS' ? 'good' : 'danger'
+            def statusEmoji = currentBuild.currentResult == 'SUCCESS' ? '✅' : '❌'
 
-                slackSend(
-                    webhookUrl: env.SLACK_WEBHOOK_URL,
-                    channel: '#devops-alerts',
-                    color: slackColor,
-                    message: "${statusEmoji} Build ${currentBuild.currentResult} for ${env.JOB_NAME} #${env.BUILD_NUMBER}\n" +
-                             "Triggered by:\n${buildUser}\n" +
-                             "Last commit: ${lastCommit}"
-                )
-            }
+            slackSend(
+                webhookUrl: env.SLACK_WEBHOOK_URL,
+                channel: '#devops-alerts',
+                color: slackColor,
+                message: "${statusEmoji} Build ${currentBuild.currentResult} for ${env.JOB_NAME} #${env.BUILD_NUMBER}\n" +
+                         "Triggered by: ${buildUser}\n" +
+                         "Last commit: ${lastCommit}"
+            )
         }
     }
+}
 }
