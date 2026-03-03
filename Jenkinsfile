@@ -55,7 +55,7 @@ post {
             def statusEmoji = currentBuild.currentResult == 'SUCCESS' ? '✅' : '❌'
 
             slackSend(
-                channel: '#devops-alerts',
+                channel: '#jenkins-notification',
                 color: slackColor,
                 message: "${statusEmoji} Build ${currentBuild.currentResult} for ${env.JOB_NAME} #${env.BUILD_NUMBER}\n" +
                          "Triggered by: ${buildUser}\n" +
