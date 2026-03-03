@@ -5,7 +5,7 @@ class handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-type","text/plain")
         self.end_headers()
-        self.wfile.write(b"Server is running smoothly!")
+        self.wfile.write(b"Server is running smoothly 4!")
 
 PORT = 5000
 
