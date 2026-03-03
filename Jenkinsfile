@@ -51,7 +51,7 @@ post {
             // Slack Notification باستخدام curl
             def payload = """
             {
-              "channel": "#devops-alerts",
+              "channel": "#jenkins-notification",
               "text": "${statusEmoji} Build ${currentBuild.currentResult} for ${env.JOB_NAME} #${env.BUILD_NUMBER}\nTriggered by: ${buildUser}\nLast commit: ${lastCommit}"
             }
             """
