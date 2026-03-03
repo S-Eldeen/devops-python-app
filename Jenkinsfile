@@ -32,8 +32,7 @@ pipeline {
             }
         }
     }
-
- post {
+post {
     always {
         script {
             // آخر commit
@@ -45,18 +44,19 @@ pipeline {
             // مين عمل Build
             def buildUser = env.BUILD_USER ?: "Unknown"
 
-            // Slack Notification
+            // الحالة ولون الرسالة
             def slackColor = currentBuild.currentResult == 'SUCCESS' ? 'good' : 'danger'
             def statusEmoji = currentBuild.currentResult == 'SUCCESS' ? '✅' : '❌'
 
-            slackSend(
-                webhookUrl: env.SLACK_WEBHOOK_URL,
-                channel: '#devops-alerts',
-                color: slackColor,
-                message: "${statusEmoji} Build ${currentBuild.currentResult} for ${env.JOB_NAME} #${env.BUILD_NUMBER}\n" +
-                         "Triggered by: ${buildUser}\n" +
-                         "Last commit: ${lastCommit}"
-            )
+            // Slack Notification باستخدام curl
+            def payload = """
+            {
+              "channel": "#devops-alerts",
+              "text": "${statusEmoji} Build ${currentBuild.currentResult} for ${env.JOB_NAME} #${env.BUILD_NUMBER}\nTriggered by: ${buildUser}\nLast commit: ${lastCommit}"
+            }
+            """
+
+            sh "curl -X POST -H 'Content-type: application/json' --data '${payload}' ${SLACK_WEBHOOK_URL}"
         }
     }
 }
