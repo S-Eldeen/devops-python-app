@@ -29,7 +29,7 @@ pipeline {
         stage('Run Container') {
             steps {
                 sh '''
-                docker ظstop devops-container || true
+                docker stop devops-container || true
                 docker rm devops-container || true
                 docker run -d -p 5001:5000 --name devops-container devops-python-app
                 '''
