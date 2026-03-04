@@ -6,6 +6,7 @@ class handler(BaseHTTPRequestHandler):
         self.send_header("Content-type","text/plain")
         self.end_headers()
         self.wfile.write(b"Server is running smoothly!")
+        self.wfile.write(b"the last test was successful!")
 
 PORT = 5000
 
