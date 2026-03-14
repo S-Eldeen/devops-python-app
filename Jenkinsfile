@@ -63,7 +63,7 @@ pipeline {
                 // 4. تجهيز الـ Payload (استخدام attachments لشكل احترافي)
                 def payload = """
                 {
-                  "channel": "#jenkins-notification",
+                  "channel": "#devops-alerts",
                   "attachments": [
                     {
                       "color": "${slackColor}",
