@@ -1,87 +1,217 @@
 pipeline {
+
     agent any
-    
+
     environment {
-        // تأكد من وجود الـ Credentials دي في Jenkins كـ Secret Text
-        SLACK_WEBHOOK_URL = credentials('slack-webhook') 
+
+        SLACK_WEBHOOK_URL = credentials('slack-webhook')
+
+        VERSION = "${env.BUILD_NUMBER}"
+
+        APP_NAME = "devops-python-app"
+
     }
-    
+
     stages {
+
         stage('Clean Workspace') {
+
             steps {
+
                 deleteDir()
+
             }
+
         }
 
         stage('Checkout Code') {
+
             steps {
+
                 git branch: 'main',
-                    url: 'https://github.com/S-Eldeen/devops-python-app.git'
+
+                url: 'https://github.com/S-Eldeen/devops-python-app.git'
+
             }
+
         }
 
         stage('Build Docker Image') {
+
             steps {
-                sh 'docker build --no-cache -t devops-python-app .'
+
+                sh '''
+
+                docker build --no-cache -t ${APP_NAME}:${VERSION} .
+
+                docker tag ${APP_NAME}:${VERSION} ${APP_NAME}:latest
+
+                '''
+
             }
+
         }
 
-        stage('Run Container') {
+        stage('Load Image to Minikube') {
+
             steps {
+
                 sh '''
-                docker stop devops-container || true
-                docker rm devops-container || true
-                docker run -d -p 5001:5000 --name devops-container devops-python-app
+
+                minikube image load ${APP_NAME}:${VERSION}
+
                 '''
+
             }
+
         }
+
+        stage('Prepare Kubernetes Deployment') {
+
+            steps {
+
+                sh '''
+
+                sed 's/VERSION/'${VERSION}'/g' deployment.yaml > deployment-final.yaml
+
+                '''
+
+            }
+
+        }
+
+        stage('Deploy to Kubernetes') {
+
+            steps {
+
+                sh '''
+
+                kubectl apply -f deployment-final.yaml
+
+                kubectl apply -f service.yaml
+
+                kubectl rollout status deployment/${APP_NAME} || kubectl rollout undo deployment/${APP_NAME}
+
+                '''
+
+            }
+
+        }
+
+        stage('Health Check') {
+
+            steps {
+
+                sh '''
+
+                kubectl get pods
+
+                kubectl get svc
+
+                kubectl rollout history deployment/${APP_NAME}
+
+                '''
+
+            }
+
+        }
+
     }
 
     post {
-        always {
+
+        success {
+
             script {
-                // 1. جلب بيانات آخر Commit
+
                 def lastCommit = sh(
+
                     returnStdout: true,
+
                     script: "git log -1 --pretty=format:'%h by %an on %cd' --date=short"
+
                 ).trim()
 
-                // 2. تحديد سبب الـ Build (Manual vs GitHub)
-                def causes = currentBuild.getBuildCauses()
-                def buildTrigger = "Automated/Other"
-
-                if (causes.toString().contains('UserIdCause')) {
-                    buildTrigger = "Jenkins Build Now (Manual)"
-                } else if (causes.toString().contains('GitHubPushCause') || causes.toString().contains('SCMTriggerCause')) {
-                    buildTrigger = "GitHub Push"
-                }
-
-                // 3. تحديد حالة الـ Build والألوان لـ Slack
-                def statusEmoji = currentBuild.currentResult == 'SUCCESS' ? '✅' : '❌'
-                def slackColor = currentBuild.currentResult == 'SUCCESS' ? '#36a64f' : '#ff0000'
-
-                // 4. تجهيز الـ Payload (استخدام attachments لشكل احترافي)
                 def payload = """
+
                 {
-                  "channel": "#devops-alerts",
+
                   "attachments": [
+
                     {
-                      "color": "${slackColor}",
-                      "title": "${statusEmoji} Build ${currentBuild.currentResult}: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                      "text": "*Triggered by:* ${buildTrigger}\\n*Last Commit:* ${lastCommit}\\n*Build URL:* ${env.BUILD_URL}",
-                      "mrkdwn_in": ["text"]
+
+                      "color": "#36a64f",
+
+                      "title": "✅ Build SUCCESS ${env.JOB_NAME} #${VERSION}",
+
+                      "text": "*Version:* ${VERSION}\\n*Commit:* ${lastCommit}\\n*URL:* ${env.BUILD_URL}"
+
                     }
+
                   ]
+
                 }
+
                 """
 
-                // 5. إرسال الإشعار عن طريق ملف مؤقت لتجنب مشاكل الـ Shell Quotes
-                writeFile file: 'slack_payload.json', text: payload
-                sh "curl -X POST -H 'Content-type: application/json' --data @slack_payload.json ${SLACK_WEBHOOK_URL}"
-                
-                // مسح الملف المؤقت بعد الإرسال
-                sh "rm slack_payload.json"
+                writeFile file: 'slack.json', text: payload
+
+                sh '''
+
+                curl -X POST -H "Content-type: application/json" \
+
+                --data @slack.json \
+
+                $SLACK_WEBHOOK_URL
+
+                '''
+
             }
+
         }
+
+        failure {
+
+            script {
+
+                def payload = """
+
+                {
+
+                  "attachments": [
+
+                    {
+
+                      "color": "#ff0000",
+
+                      "title": "❌ Build FAILED ${env.JOB_NAME}",
+
+                      "text": "*Build:* ${env.BUILD_URL}"
+
+                    }
+
+                  ]
+
+                }
+
+                """
+
+                writeFile file: 'slack.json', text: payload
+
+                sh '''
+
+                curl -X POST -H "Content-type: application/json" \
+
+                --data @slack.json \
+
+                $SLACK_WEBHOOK_URL
+
+                '''
+
+            }
+
+        }
+
     }
+
 }
