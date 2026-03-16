@@ -1,217 +1,205 @@
 pipeline {
 
-    agent any
+agent any
 
-    environment {
+environment {
 
-        SLACK_WEBHOOK_URL = credentials('slack-webhook')
+SLACK_WEBHOOK_URL = credentials('slack-webhook')
 
-        VERSION = "${env.BUILD_NUMBER}"
+VERSION = "${env.BUILD_NUMBER}"
 
-        APP_NAME = "devops-python-app"
+APP_NAME = "devops-python-app"
 
-    }
+}
 
-    stages {
+stages {
 
-        stage('Clean Workspace') {
+stage('Clean Workspace') {
 
-            steps {
+steps {
 
-                deleteDir()
+deleteDir()
 
-            }
+}
 
-        }
+}
 
-        stage('Checkout Code') {
+stage('Checkout Code') {
 
-            steps {
+steps {
 
-                git branch: 'main',
+git branch: 'main',
 
-                url: 'https://github.com/S-Eldeen/devops-python-app.git'
+url: 'https://github.com/S-Eldeen/devops-python-app.git'
 
-            }
+}
 
-        }
+}
 
-        stage('Build Docker Image') {
+stage('Build Docker Image') {
 
-            steps {
+steps {
 
-                sh '''
+sh '''
 
-                docker build --no-cache -t ${APP_NAME}:${VERSION} .
+docker build --no-cache -t ${APP_NAME}:${VERSION} .
 
-                docker tag ${APP_NAME}:${VERSION} ${APP_NAME}:latest
+docker tag ${APP_NAME}:${VERSION} ${APP_NAME}:latest
 
-                '''
+'''
 
-            }
+}
 
-        }
+}
 
-        stage('Load Image to Minikube') {
+stage('Prepare Kubernetes Deployment') {
 
-            steps {
+steps {
 
-                sh '''
+sh '''
 
-                minikube image load ${APP_NAME}:${VERSION}
+sed 's/VERSION/'${VERSION}'/g' deployment.yaml > deployment-final.yaml
 
-                '''
+'''
 
-            }
+}
 
-        }
+}
 
-        stage('Prepare Kubernetes Deployment') {
+stage('Deploy to Kubernetes') {
 
-            steps {
+steps {
 
-                sh '''
+sh '''
 
-                sed 's/VERSION/'${VERSION}'/g' deployment.yaml > deployment-final.yaml
+kubectl apply -f deployment-final.yaml || kubectl create -f deployment-final.yaml
 
-                '''
+kubectl apply -f service.yaml
 
-            }
+kubectl rollout restart deployment/${APP_NAME}
 
-        }
+kubectl rollout status deployment/${APP_NAME}
 
-        stage('Deploy to Kubernetes') {
+'''
 
-            steps {
+}
 
-                sh '''
+}
 
-                kubectl apply -f deployment-final.yaml
+stage('Health Check') {
 
-                kubectl apply -f service.yaml
+steps {
 
-                kubectl rollout status deployment/${APP_NAME} || kubectl rollout undo deployment/${APP_NAME}
+sh '''
 
-                '''
+kubectl get pods
 
-            }
+kubectl get svc
 
-        }
+kubectl rollout history deployment/${APP_NAME}
 
-        stage('Health Check') {
+'''
 
-            steps {
+}
 
-                sh '''
+}
 
-                kubectl get pods
+}
 
-                kubectl get svc
+post {
 
-                kubectl rollout history deployment/${APP_NAME}
+success {
 
-                '''
+script {
 
-            }
+def lastCommit = sh(
 
-        }
+returnStdout: true,
 
-    }
+script: "git log -1 --pretty=format:'%h by %an on %cd' --date=short"
 
-    post {
+).trim()
 
-        success {
+def payload = """
 
-            script {
+{
 
-                def lastCommit = sh(
+"attachments":[
 
-                    returnStdout: true,
+{
 
-                    script: "git log -1 --pretty=format:'%h by %an on %cd' --date=short"
+"color":"#36a64f",
 
-                ).trim()
+"title":"✅ Build SUCCESS ${env.JOB_NAME} #${VERSION}",
 
-                def payload = """
+"text":"Version: ${VERSION}\\nCommit: ${lastCommit}\\nURL: ${env.BUILD_URL}"
 
-                {
+}
 
-                  "attachments": [
+]
 
-                    {
+}
 
-                      "color": "#36a64f",
+"""
 
-                      "title": "✅ Build SUCCESS ${env.JOB_NAME} #${VERSION}",
+writeFile file: 'slack.json', text: payload
 
-                      "text": "*Version:* ${VERSION}\\n*Commit:* ${lastCommit}\\n*URL:* ${env.BUILD_URL}"
+sh """
 
-                    }
+curl -X POST -H 'Content-type: application/json' \
 
-                  ]
+--data @slack.json \
 
-                }
+${SLACK_WEBHOOK_URL}
 
-                """
+"""
 
-                writeFile file: 'slack.json', text: payload
+}
 
-                sh '''
+}
 
-                curl -X POST -H "Content-type: application/json" \
+failure {
 
-                --data @slack.json \
+script {
 
-                $SLACK_WEBHOOK_URL
+def payload = """
 
-                '''
+{
 
-            }
+"attachments":[
 
-        }
+{
 
-        failure {
+"color":"#ff0000",
 
-            script {
+"title":"❌ Build FAILED ${env.JOB_NAME}",
 
-                def payload = """
+"text":"URL: ${env.BUILD_URL}"
 
-                {
+}
 
-                  "attachments": [
+]
 
-                    {
+}
 
-                      "color": "#ff0000",
+"""
 
-                      "title": "❌ Build FAILED ${env.JOB_NAME}",
+writeFile file: 'slack.json', text: payload
 
-                      "text": "*Build:* ${env.BUILD_URL}"
+sh """
 
-                    }
+curl -X POST -H 'Content-type: application/json' \
 
-                  ]
+--data @slack.json \
 
-                }
+${SLACK_WEBHOOK_URL}
 
-                """
+"""
 
-                writeFile file: 'slack.json', text: payload
+}
 
-                sh '''
+}
 
-                curl -X POST -H "Content-type: application/json" \
-
-                --data @slack.json \
-
-                $SLACK_WEBHOOK_URL
-
-                '''
-
-            }
-
-        }
-
-    }
+}
 
 }
